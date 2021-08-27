@@ -1,0 +1,7 @@
+namespace maple_server_hotfix
+{
+    public static class Constants
+    {
+        public static readonly byte[] Delimiter = { 0x30, 0x78, 0x64, 0x65, 0x61, 0x64, 0x62, 0x65, 0x65, 0x66, 0x00 };
+    }
+}
