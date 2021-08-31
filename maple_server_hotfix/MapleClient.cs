@@ -76,7 +76,7 @@ namespace maple_server_hotfix
 
                 var splitData = Split(buffer);
                 var operation = splitData[0][0];
-                byte[] decrypted = Crypto.AesDecrypt(splitData[1], Key, Iv);
+                byte[] decrypted = splitData.Length > 1 ? Crypto.AesDecrypt(splitData[1], Key, Iv) : null;
 
                 switch (operation)
                 {
@@ -100,6 +100,12 @@ namespace maple_server_hotfix
                         // TODO: is this fixup needed here? should it always be used?
                         decrypted = fixup(decrypted);
                         HandleHeartbeat(decrypted);
+                        break;
+                    }
+                    // 🏓 ping 🏓
+                    case 0xC3:
+                    {
+                        HandlePing();
                         break;
                     }
                 }
@@ -153,7 +159,7 @@ namespace maple_server_hotfix
                 { "u", user },
                 { "p", pass },
                 { "h", hwid },
-                { "ha", "55F3B22D9107DF7B2CC0124A5FCB66E376A5C94F3991B3EB59D20881D58E21EE" },
+                { "ha", hash },
             };
 
             var content = new FormUrlEncodedContent(values);
@@ -335,6 +341,13 @@ namespace maple_server_hotfix
             responseData.Add(unixTimeMilliseconds.ToString());
 
             packet.Add(responseData.GetEncryptedBuffer(this));
+            packet.WriteToStream(_stream);
+        }
+
+        internal void HandlePing()
+        {
+            var packet = new DelimitedPacketBuffer();
+            packet.AddByte(0xC3);
             packet.WriteToStream(_stream);
         }
 
