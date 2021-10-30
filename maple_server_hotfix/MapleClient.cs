@@ -89,9 +89,7 @@ namespace maple_server_hotfix
                     // 🦀 dll stream 🦀
                     case 0xB1:
                     {
-                        var success = HandleDllStream(decrypted);
-                        if (success)
-                            return; // dll streamed, exit out. injected dll will make its own connection
+                        HandleDllStream(decrypted);
                         break;
                     }
                     // ♥ heartbeat ♥
@@ -181,7 +179,7 @@ namespace maple_server_hotfix
                             InternalError = 0x5
                          */
 
-            if (errorCode == 0 || errorCode == 0x2) // all is gud
+            if (errorCode == 0) // all is gud
             {
                 var packet = new DelimitedPacketBuffer();
                 packet.AddByte(0xF3);
@@ -189,6 +187,8 @@ namespace maple_server_hotfix
                 var sessionInfo = new DelimitedPacketBuffer();
                 sessionInfo.AddByte((byte)errorCode); // guaranteed to be 0
                 sessionInfo.Add((string)json["sessionID"]);
+                sessionInfo.Add((string)json["discordID"]);
+                sessionInfo.Add((string)json["avatarHash"]);
                 packet.Add(sessionInfo.GetEncryptedBuffer(this));
 
                 var gameList = new DelimitedPacketBuffer();
@@ -254,7 +254,7 @@ namespace maple_server_hotfix
             }
         }
 
-        internal bool HandleDllStream(byte[] decrypted)
+        internal void HandleDllStream(byte[] decrypted)
         {
             var splitDecryptedBuffer = Split(decrypted);
             splitDecryptedBuffer[1] = fixup(splitDecryptedBuffer[1]);
@@ -288,20 +288,20 @@ namespace maple_server_hotfix
                 badResponsePacket.AddByte(0xB1);
                 badResponsePacket.Add(responseCode.GetEncryptedBuffer(this));
                 badResponsePacket.WriteToStream(_stream);
-                return false;
             }
+            else
+            {
+                var dllData = _fileProvider.Get(cheatId, releaseStream);
 
-            var dllData = _fileProvider.Get(cheatId, releaseStream);
+                var clearPayload = new DelimitedPacketBuffer();
+                clearPayload.AddByte((byte) code);
+                clearPayload.Add(Crypto.AesEncrypt(dllData.ToArray(), Key, Iv));
 
-            var clearPayload = new DelimitedPacketBuffer();
-            clearPayload.AddByte((byte)code);
-            clearPayload.Add(Crypto.AesEncrypt(dllData.ToArray(), Key, Iv));
-
-            var dllStreamPacket = new DelimitedPacketBuffer();
-            dllStreamPacket.AddByte(0xB1);
-            dllStreamPacket.Add(clearPayload.GetEncryptedBuffer(this));
-            dllStreamPacket.WriteToStream(_stream);
-            return true;
+                var dllStreamPacket = new DelimitedPacketBuffer();
+                dllStreamPacket.AddByte(0xB1);
+                dllStreamPacket.Add(clearPayload.GetEncryptedBuffer(this));
+                dllStreamPacket.WriteToStream(_stream);
+            }
         }
 
         internal void HandleHeartbeat(byte[] decrypted)
