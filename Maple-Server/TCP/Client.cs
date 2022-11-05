@@ -113,6 +113,9 @@ public class Client : IDisposable
             case PacketType.ImageStreamStageTwo:
                 handleImageStreamStageTwo(encryptedPayload);
                 break;
+            case PacketType.Heartbeat:
+                handleHeartbeat(encryptedPayload);
+                break;
             default:
                 Logger.Instance.Log(LogSeverity.Error, $"Client [{Handle}]({IP}) sent unknown packet!");
                 Disconnect();
@@ -349,6 +352,47 @@ public class Client : IDisposable
         
         List<byte> responsePacket = new();
         responsePacket.Add((byte)PacketType.ImageStreamStageTwo);
+        responsePacket.AddRange(CryptoProvider.Instance.AesEncrypt(Encoding.ASCII.GetBytes(responseJsonPayload), _key, _iv));
+                
+        _packetStreamer.Send(responsePacket.ToArray(), _stream);
+    }
+
+    private void handleHeartbeat(byte[] encryptedPayload)
+    {
+        HeartbeatRequest payload = JsonSerializer.Deserialize<HeartbeatRequest>(Encoding.ASCII.GetString(CryptoProvider.Instance.AesDecrypt(encryptedPayload, _key, _iv)));
+
+        if (_epochs.Contains(payload.Epoch) || !_epochs.All(e => e < payload.Epoch))
+        {
+            Logger.Instance.Log(LogSeverity.Warning, $"Client [{Handle}]({IP}) sent invalid epoch!");
+            Disconnect();
+
+            return;
+        }
+
+        _epochs.Add(payload.Epoch);
+        
+        var heartbeatParams = new Dictionary<string, string>
+        {
+            { "t", "2" },
+            { "s", payload.SessionToken }
+        };
+
+        var heartbeatResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", heartbeatParams));
+
+        HeartbeatResponse responsePayload = new HeartbeatResponse
+        {
+            Result = (int)heartbeatResponse["code"] == 0 ? HeartbeatResult.Success : ((int)heartbeatResponse["code"] == 5 ? HeartbeatResult.InvalidSession : HeartbeatResult.UnknownError)
+        };
+        
+        if (responsePayload.Result == HeartbeatResult.Success)
+            Logger.Instance.Log(LogSeverity.Info, $"Client's [{Handle}]({IP}) heartbeat succeeded.");
+        else
+            Logger.Instance.Log(LogSeverity.Warning, $"Client's [{Handle}]({IP}) heartbeat failed!");
+        
+        string responseJsonPayload = JsonSerializer.Serialize(responsePayload);
+        
+        List<byte> responsePacket = new();
+        responsePacket.Add((byte)PacketType.Heartbeat);
         responsePacket.AddRange(CryptoProvider.Instance.AesEncrypt(Encoding.ASCII.GetBytes(responseJsonPayload), _key, _iv));
                 
         _packetStreamer.Send(responsePacket.ToArray(), _stream);
