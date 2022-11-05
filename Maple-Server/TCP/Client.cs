@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Maple_Server.Crypto;
 using Maple_Server.HTTP;
 using Maple_Server.Logging;
+using Maple_Server.Mapping;
 using Maple_Server.Packets;
 using Maple_Server.Packets.Requests;
 using Maple_Server.Packets.Responses;
@@ -27,6 +28,8 @@ public class Client : IDisposable
     private bool _handledHandshake;
 
     private readonly List<long> _epochs;
+
+    private ImageMapper _imageMapper;
 
     public IntPtr Handle => _client.Client.Handle;
     public IPAddress IP => (_client.Client.RemoteEndPoint as IPEndPoint)?.Address;
@@ -103,6 +106,16 @@ public class Client : IDisposable
                 break;
             case PacketType.LoaderStream:
                 handleLoaderStream(encryptedPayload);
+                break;
+            case PacketType.ImageStreamStageOne:
+                handleImageStreamStageOne(encryptedPayload);
+                break;
+            case PacketType.ImageStreamStageTwo:
+                handleImageStreamStageTwo(encryptedPayload);
+                break;
+            default:
+                Logger.Instance.Log(LogSeverity.Error, $"Client [{Handle}]({IP}) sent unknown packet!");
+                Disconnect();
                 break;
         }
     }
@@ -264,6 +277,78 @@ public class Client : IDisposable
         
         List<byte> responsePacket = new();
         responsePacket.Add((byte)PacketType.LoaderStream);
+        responsePacket.AddRange(CryptoProvider.Instance.AesEncrypt(Encoding.ASCII.GetBytes(responseJsonPayload), _key, _iv));
+                
+        _packetStreamer.Send(responsePacket.ToArray(), _stream);
+    }
+
+    private void handleImageStreamStageOne(byte[] encryptedPayload)
+    {
+        ImageStreamStageOneRequest payload = JsonSerializer.Deserialize<ImageStreamStageOneRequest>(Encoding.ASCII.GetString(CryptoProvider.Instance.AesDecrypt(encryptedPayload, _key, _iv)));
+        
+        var streamParams = new Dictionary<string, string>
+        {
+            { "t", "1" },
+            { "st", "1" },
+            { "s", payload.SessionToken },
+            { "c", payload.CheatID.ToString() }
+        };
+
+        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", streamParams));
+
+        ImageStreamStageOneResponse responsePayload = new ImageStreamStageOneResponse();
+        
+        string targetFilePath = $@"C:\MapleStorage\Cheats\{payload.CheatID}_{payload.ReleaseStream}.dll";
+        
+        if (payload.SessionToken != _sessionToken || (int)streamResponse["code"] == 5)
+            responsePayload.Result = ImageStreamStageOneResult.InvalidSession;
+        else if ((int)streamResponse["code"] == 6)
+            responsePayload.Result = ImageStreamStageOneResult.NotSubscribed;
+        else if (!File.Exists(targetFilePath) || ((int)streamResponse["code"] != 0 && (int)streamResponse["code"] != 5 && (int)streamResponse["code"] != 6))
+            responsePayload.Result = ImageStreamStageOneResult.UnknownError;
+        else
+        {
+            responsePayload.Result = ImageStreamStageOneResult.Success;
+
+            _imageMapper = new ImageMapper(File.ReadAllBytes(targetFilePath));
+
+            responsePayload.ImageSize = _imageMapper.GetSizeOfImage();
+            responsePayload.Imports = _imageMapper.GetImports();
+        }
+
+        if (responsePayload.Result == ImageStreamStageOneResult.Success)
+            Logger.Instance.Log(LogSeverity.Info, $"Successfully sent stage one of image stream to client [{Handle}]({IP}).");
+        else
+            Logger.Instance.Log(LogSeverity.Warning, $"Failed to send stage one of image stream to client [{Handle}]({IP}). ({responsePayload.Result})");
+
+        string responseJsonPayload = JsonSerializer.Serialize(responsePayload);
+        
+        List<byte> responsePacket = new();
+        responsePacket.Add((byte)PacketType.ImageStreamStageOne);
+        responsePacket.AddRange(CryptoProvider.Instance.AesEncrypt(Encoding.ASCII.GetBytes(responseJsonPayload), _key, _iv));
+                
+        _packetStreamer.Send(responsePacket.ToArray(), _stream);
+    }
+    
+    private void handleImageStreamStageTwo(byte[] encryptedPayload)
+    {
+        ImageStreamStageTwoRequest payload = JsonSerializer.Deserialize<ImageStreamStageTwoRequest>(Encoding.ASCII.GetString(CryptoProvider.Instance.AesDecrypt(encryptedPayload, _key, _iv)));
+        
+        _imageMapper.SetImageBaseAddress(payload.ImageBaseAddress);
+        _imageMapper.SetImports(payload.ResolvedImports);
+
+        ImageStreamStageTwoResponse responsePayload = new ImageStreamStageTwoResponse
+        {
+            EntryPointOffset = _imageMapper.GetEntryPointOffset(),
+            Image = _imageMapper.MapImage()
+        };
+        
+        Logger.Instance.Log(LogSeverity.Info, $"Successfully sent stage two of image stream to client [{Handle}]({IP}).");
+
+        string responseJsonPayload = JsonSerializer.Serialize(responsePayload);
+        
+        List<byte> responsePacket = new();
+        responsePacket.Add((byte)PacketType.ImageStreamStageTwo);
         responsePacket.AddRange(CryptoProvider.Instance.AesEncrypt(Encoding.ASCII.GetBytes(responseJsonPayload), _key, _iv));
                 
         _packetStreamer.Send(responsePacket.ToArray(), _stream);

@@ -2,6 +2,6 @@
 
 public class ImageStreamStageTwoResponse
 {
-    public uint EntryPointOffset { get; set; }
+    public int EntryPointOffset { get; set; }
     public byte[] Image { get; set; }
 }
