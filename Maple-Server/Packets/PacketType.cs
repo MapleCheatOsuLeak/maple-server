@@ -7,5 +7,6 @@ public enum PacketType : byte
     LoaderStream = 0xC0,
     ImageStreamStageOne = 0xD0,
     ImageStreamStageTwo = 0xD1,
-    Heartbeat = 0xE0
+    Heartbeat = 0xE0,
+    Ping = 0xF0
 }

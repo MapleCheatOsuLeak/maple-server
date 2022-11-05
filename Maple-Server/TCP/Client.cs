@@ -116,6 +116,9 @@ public class Client : IDisposable
             case PacketType.Heartbeat:
                 handleHeartbeat(encryptedPayload);
                 break;
+            case PacketType.Ping:
+                handlePing();
+                break;
             default:
                 Logger.Instance.Log(LogSeverity.Error, $"Client [{Handle}]({IP}) sent unknown packet!");
                 Disconnect();
@@ -396,5 +399,10 @@ public class Client : IDisposable
         responsePacket.AddRange(CryptoProvider.Instance.AesEncrypt(Encoding.ASCII.GetBytes(responseJsonPayload), _key, _iv));
                 
         _packetStreamer.Send(responsePacket.ToArray(), _stream);
+    }
+
+    private void handlePing()
+    {
+        _packetStreamer.Send(new []{ (byte)PacketType.Ping }, _stream);
     }
 }
