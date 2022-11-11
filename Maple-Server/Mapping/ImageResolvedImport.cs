@@ -4,5 +4,5 @@ public class ImageResolvedImport
 {
     public string DescriptorName { get; set; }
     public string FunctionNameOrOrdinal { get; set; }
-    public IntPtr FunctionAddress { get; set; }
+    public int FunctionAddress { get; set; }
 }

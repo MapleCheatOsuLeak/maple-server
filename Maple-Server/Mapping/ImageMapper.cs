@@ -50,7 +50,7 @@ public class ImageMapper
                 if (resolvedImport == default)
                     continue;
 
-                IntPtr functionAddress = resolvedImport.FunctionAddress;
+                IntPtr functionAddress = (IntPtr)resolvedImport.FunctionAddress;
                 MemoryMarshal.Write(_imageBytes.Span[functionOffset..], ref functionAddress);
             }
         }

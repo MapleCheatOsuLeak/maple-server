@@ -295,7 +295,7 @@ public class Client : IDisposable
         var streamParams = new Dictionary<string, string>
         {
             { "t", "1" },
-            { "st", "1" },
+            { "st", "0" },
             { "s", payload.SessionToken },
             { "c", payload.CheatID.ToString() }
         };
@@ -306,7 +306,7 @@ public class Client : IDisposable
         
         string targetFilePath = $@"C:\MapleStorage\Cheats\{payload.CheatID}_{payload.ReleaseStream}.dll";
         
-        if (payload.SessionToken != _sessionToken || (int)streamResponse["code"] == 5)
+        if ((int)streamResponse["code"] == 5)
             responsePayload.Result = ImageStreamStageOneResult.InvalidSession;
         else if ((int)streamResponse["code"] == 6)
             responsePayload.Result = ImageStreamStageOneResult.NotSubscribed;
@@ -315,6 +315,8 @@ public class Client : IDisposable
         else
         {
             responsePayload.Result = ImageStreamStageOneResult.Success;
+
+            _sessionToken = payload.SessionToken;
 
             _imageMapper = new ImageMapper(File.ReadAllBytes(targetFilePath));
 
@@ -340,16 +342,35 @@ public class Client : IDisposable
     {
         ImageStreamStageTwoRequest payload = JsonSerializer.Deserialize<ImageStreamStageTwoRequest>(Encoding.ASCII.GetString(CryptoProvider.Instance.AesDecrypt(encryptedPayload, _key, _iv)));
         
-        _imageMapper.SetImageBaseAddress(payload.ImageBaseAddress);
-        _imageMapper.SetImports(payload.ResolvedImports);
-
-        ImageStreamStageTwoResponse responsePayload = new ImageStreamStageTwoResponse
+        var streamParams = new Dictionary<string, string>
         {
-            EntryPointOffset = _imageMapper.GetEntryPointOffset(),
-            Image = _imageMapper.MapImage()
+            { "t", "1" },
+            { "st", "1" },
+            { "s", payload.SessionToken },
+            { "c", payload.CheatID.ToString() }
         };
-        
-        Logger.Instance.Log(LogSeverity.Info, $"Successfully sent stage two of image stream to client [{Handle}]({IP}).");
+
+        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", streamParams));
+
+        ImageStreamStageTwoResponse responsePayload = new ImageStreamStageTwoResponse();
+
+        if (payload.SessionToken != _sessionToken || (int)streamResponse["code"] == 5)
+            responsePayload.Result = ImageStreamStageTwoResult.InvalidSession;
+        else if ((int)streamResponse["code"] == 6)
+            responsePayload.Result = ImageStreamStageTwoResult.NotSubscribed;
+        else if (((int)streamResponse["code"] != 0 && (int)streamResponse["code"] != 5 && (int)streamResponse["code"] != 6))
+            responsePayload.Result = ImageStreamStageTwoResult.UnknownError;
+        else
+        {
+            responsePayload.Result = ImageStreamStageTwoResult.Success;
+            responsePayload.EntryPointOffset = _imageMapper.GetEntryPointOffset();
+            responsePayload.Image = _imageMapper.MapImage();
+        }
+
+        if (responsePayload.Result == ImageStreamStageTwoResult.Success)
+            Logger.Instance.Log(LogSeverity.Info, $"Successfully sent stage two of image stream to client [{Handle}]({IP}).");
+        else
+            Logger.Instance.Log(LogSeverity.Warning, $"Failed to send stage two of image stream to client [{Handle}]({IP}). ({responsePayload.Result})");
 
         string responseJsonPayload = JsonSerializer.Serialize(responsePayload);
         
