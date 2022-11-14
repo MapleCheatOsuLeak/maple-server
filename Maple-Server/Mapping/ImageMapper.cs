@@ -88,9 +88,8 @@ public class ImageMapper
             });
         }
 
-        byte zeroByte = 0x00;
-        MemoryMarshal.Write(_imageBytes.Span[.._peImage.Headers.PEHeader!.SizeOfHeaders], ref zeroByte);
-        
-        return _imageBytes.ToArray();
+        byte[] result = new byte[_imageBytes.Length];
+        Array.Copy(_imageBytes.ToArray(), _peImage.Headers.PEHeader.SizeOfHeaders, result, _peImage.Headers.PEHeader.SizeOfHeaders, _imageBytes.Length - _peImage.Headers.PEHeader.SizeOfHeaders);
+        return result;
     }
 }
