@@ -366,8 +366,8 @@ public class Client : IDisposable
             _imageMapper.SetImports(payload.ResolvedImports);
             
             responsePayload.Result = ImageStreamStageTwoResult.Success;
-            responsePayload.EntryPointOffset = _imageMapper.GetEntryPointOffset();
             responsePayload.Sections = _imageMapper.MapImage();
+            responsePayload.Callbacks = _imageMapper.GetCallbacks();
         }
 
         if (responsePayload.Result == ImageStreamStageTwoResult.Success)

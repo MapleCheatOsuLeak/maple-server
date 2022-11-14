@@ -56,7 +56,17 @@ public class ImageMapper
         }
     }
 
-    public int GetEntryPointOffset() => _peImage.Headers.PEHeader.AddressOfEntryPoint;
+    public List<int> GetCallbacks()
+    {
+        List<int> callbacks = new();
+        foreach (var callbackOffset in _peImage.TlsDirectory.GetTlsCallbacks().Select(callBack => callBack.RelativeAddress))
+            callbacks.Add(callbackOffset);
+
+        if (!((_peImage.Headers.CorHeader?.Flags.HasFlag(CorFlags.ILOnly) ?? false) || _peImage.Headers.PEHeader!.AddressOfEntryPoint == 0))
+            callbacks.Add(_peImage.Headers.PEHeader!.AddressOfEntryPoint);
+
+        return callbacks;
+    }
 
     public List<ImageSection> MapImage()
     {
@@ -100,7 +110,7 @@ public class ImageMapper
                 continue;
 
             var sectionAddress = _imageBaseAddress + sectionHeader.VirtualAddress;
-            var sectionBytes = sectionHeader.Name == ".reloc" ? new byte[sectionHeader.SizeOfRawData] : _imageBytes.Span.Slice(sectionHeader.PointerToRawData, sectionHeader.SizeOfRawData);
+            var sectionBytes = _imageBytes.Span.Slice(sectionHeader.PointerToRawData, sectionHeader.SizeOfRawData);
 
             ProtectionType sectionProtection;
             if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemExecute))
@@ -129,17 +139,13 @@ public class ImageMapper
             
             sections.Add(new ImageSection
             {
-                SectionAddress = sectionAddress.ToInt32(),
-                SectionData = sectionBytes.ToArray(),
-                AlignedSectionSize = alignedSectionSize,
-                SectionProtection = sectionProtection
+                Address = sectionAddress.ToInt32(),
+                Data = sectionBytes.ToArray(),
+                AlignedSize = alignedSectionSize,
+                Protection = sectionProtection
             });
         }
 
         return sections;
-
-        //byte[] result = new byte[_imageBytes.Length];
-        //Array.Copy(_imageBytes.ToArray(), _peImage.Headers.PEHeader.SizeOfHeaders, result, _peImage.Headers.PEHeader.SizeOfHeaders, _imageBytes.Length - _peImage.Headers.PEHeader.SizeOfHeaders);
-        //return result;
     }
 }

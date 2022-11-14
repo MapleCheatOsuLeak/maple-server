@@ -5,8 +5,8 @@ namespace Maple_Server.Packets.Responses;
 public class ImageStreamStageTwoResponse
 {
     public ImageStreamStageTwoResult Result { get; set; }
-    public int EntryPointOffset { get; set; }
     public List<ImageSection> Sections { get; set; }
+    public List<int> Callbacks { get; set; }
 }
 
 public enum ImageStreamStageTwoResult : uint
