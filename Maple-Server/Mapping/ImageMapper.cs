@@ -58,8 +58,9 @@ public class ImageMapper
 
     public int GetEntryPointOffset() => _peImage.Headers.PEHeader.AddressOfEntryPoint;
 
-    public byte[] MapImage()
+    public List<ImageSection> MapImage()
     {
+        // process relocs
         if (_peImage.Headers.PEHeader!.Magic == PEMagic.PE32)
         {
             var delta = (uint)_imageBaseAddress.ToInt32() - (uint) _peImage.Headers.PEHeader!.ImageBase;
@@ -73,7 +74,6 @@ public class ImageMapper
                 MemoryMarshal.Write(_imageBytes.Span[relocation.Offset..], ref relocationValue);
             });
         }
-
         else
         {
             var delta = (ulong)_imageBaseAddress.ToInt64() - _peImage.Headers.PEHeader!.ImageBase;
@@ -87,9 +87,59 @@ public class ImageMapper
                 MemoryMarshal.Write(_imageBytes.Span[relocation.Offset..], ref relocationValue);
             });
         }
+        
+        // build all sections
+        List<ImageSection> sections = new();
+        var sectionHeaders = _peImage.Headers.SectionHeaders.AsEnumerable();
+        if (_peImage.Headers.CorHeader is null || !_peImage.Headers.CorHeader.Flags.HasFlag(CorFlags.ILOnly))
+            sectionHeaders = sectionHeaders.Where(sectionHeader => !sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemDiscardable));
 
-        byte[] result = new byte[_imageBytes.Length];
-        Array.Copy(_imageBytes.ToArray(), _peImage.Headers.PEHeader.SizeOfHeaders, result, _peImage.Headers.PEHeader.SizeOfHeaders, _imageBytes.Length - _peImage.Headers.PEHeader.SizeOfHeaders);
-        return result;
+        foreach (var sectionHeader in sectionHeaders)
+        {
+            if (sectionHeader.SizeOfRawData == 0)
+                continue;
+
+            var sectionAddress = _imageBaseAddress + sectionHeader.VirtualAddress;
+            var sectionBytes = sectionHeader.Name == ".reloc" ? new byte[sectionHeader.SizeOfRawData] : _imageBytes.Span.Slice(sectionHeader.PointerToRawData, sectionHeader.SizeOfRawData);
+
+            ProtectionType sectionProtection;
+            if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemExecute))
+            {
+                if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemWrite))
+                {
+                    sectionProtection = sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemRead) ? ProtectionType.ExecuteReadWrite : ProtectionType.ExecuteWriteCopy;
+                }
+
+                else
+                {
+                    sectionProtection = sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemRead) ? ProtectionType.ExecuteRead : ProtectionType.Execute;
+                }
+            }
+            else if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemWrite))
+                sectionProtection = sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemRead) ? ProtectionType.ReadWrite : ProtectionType.WriteCopy;
+            else
+                sectionProtection = sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemRead) ? ProtectionType.ReadOnly : ProtectionType.NoAccess;
+
+            if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemNotCached))
+                sectionProtection |= ProtectionType.NoCache;
+            
+            var sectionAlignment = _peImage.Headers.PEHeader!.SectionAlignment;
+            var alignedSectionSize = Math.Max(sectionHeader.SizeOfRawData, sectionHeader.VirtualSize);
+            alignedSectionSize = alignedSectionSize + sectionAlignment - 1 - (alignedSectionSize + sectionAlignment - 1) % sectionAlignment;
+            
+            sections.Add(new ImageSection
+            {
+                SectionAddress = sectionAddress.ToInt32(),
+                SectionData = sectionBytes.ToArray(),
+                AlignedSectionSize = alignedSectionSize,
+                SectionProtection = sectionProtection
+            });
+        }
+
+        return sections;
+
+        //byte[] result = new byte[_imageBytes.Length];
+        //Array.Copy(_imageBytes.ToArray(), _peImage.Headers.PEHeader.SizeOfHeaders, result, _peImage.Headers.PEHeader.SizeOfHeaders, _imageBytes.Length - _peImage.Headers.PEHeader.SizeOfHeaders);
+        //return result;
     }
 }

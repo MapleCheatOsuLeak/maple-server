@@ -362,9 +362,12 @@ public class Client : IDisposable
             responsePayload.Result = ImageStreamStageTwoResult.UnknownError;
         else
         {
+            _imageMapper.SetImageBaseAddress((IntPtr)payload.ImageBaseAddress);
+            _imageMapper.SetImports(payload.ResolvedImports);
+            
             responsePayload.Result = ImageStreamStageTwoResult.Success;
             responsePayload.EntryPointOffset = _imageMapper.GetEntryPointOffset();
-            responsePayload.Image = _imageMapper.MapImage();
+            responsePayload.Sections = _imageMapper.MapImage();
         }
 
         if (responsePayload.Result == ImageStreamStageTwoResult.Success)
