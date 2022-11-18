@@ -106,11 +106,23 @@ public class ImageMapper
 
         foreach (var sectionHeader in sectionHeaders)
         {
+            if (sectionHeader.Name == ".reloc" || sectionHeader.Name == ".rsrc")
+                continue;
+            
+            if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemDiscardable))
+                continue;
+
             if (sectionHeader.SizeOfRawData == 0)
                 continue;
 
+            var sectionSize = sectionHeader.SizeOfRawData == 0 ? (sectionHeader.VirtualSize > 0 ? 
+                sectionHeader.VirtualSize : _peImage.Headers.PEHeader.SectionAlignment) : sectionHeader.SizeOfRawData;
+            
+            if (sectionSize == 0)
+                continue;
+            
             var sectionAddress = _imageBaseAddress + sectionHeader.VirtualAddress;
-            var sectionBytes = _imageBytes.Span.Slice(sectionHeader.PointerToRawData, sectionHeader.SizeOfRawData);
+            var sectionBytes = _imageBytes.Span.Slice(sectionHeader.PointerToRawData, sectionSize);
 
             ProtectionType sectionProtection;
             if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemExecute))
@@ -133,16 +145,12 @@ public class ImageMapper
             if (sectionHeader.SectionCharacteristics.HasFlag(SectionCharacteristics.MemNotCached))
                 sectionProtection |= ProtectionType.NoCache;
             
-            var sectionAlignment = _peImage.Headers.PEHeader!.SectionAlignment;
-            var alignedSectionSize = Math.Max(sectionHeader.SizeOfRawData, sectionHeader.VirtualSize);
-            alignedSectionSize = alignedSectionSize + sectionAlignment - 1 - (alignedSectionSize + sectionAlignment - 1) % sectionAlignment;
-            
             sections.Add(new ImageSection
             {
                 Address = sectionAddress.ToInt32(),
                 Data = sectionBytes.ToArray(),
-                AlignedSize = alignedSectionSize,
-                Protection = sectionProtection
+                Protection = sectionProtection,
+                ProtectionSize = sectionHeader.SizeOfRawData,
             });
         }
 
