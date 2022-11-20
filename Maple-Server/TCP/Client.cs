@@ -180,7 +180,7 @@ public class Client : IDisposable
             { "i", IP.ToString() }
         };
 
-        var loginResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", loginParams));
+        var loginResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth", loginParams));
         
         LoginResponse responsePayload = new LoginResponse();
         responsePayload.Result = (int)loginResponse["code"] < 0 || (int)loginResponse["code"] > 4
@@ -253,7 +253,7 @@ public class Client : IDisposable
             { "c", payload.CheatID.ToString() }
         };
 
-        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", streamParams));
+        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth", streamParams));
 
         LoaderStreamResponse responsePayload = new LoaderStreamResponse();
         
@@ -300,7 +300,7 @@ public class Client : IDisposable
             { "c", payload.CheatID.ToString() }
         };
 
-        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", streamParams));
+        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth", streamParams));
 
         ImageStreamStageOneResponse responsePayload = new ImageStreamStageOneResponse();
         
@@ -350,7 +350,7 @@ public class Client : IDisposable
             { "c", payload.CheatID.ToString() }
         };
 
-        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", streamParams));
+        var streamResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth", streamParams));
 
         ImageStreamStageTwoResponse responsePayload = new ImageStreamStageTwoResponse();
 
@@ -404,7 +404,7 @@ public class Client : IDisposable
             { "s", payload.SessionToken }
         };
 
-        var heartbeatResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth_new", heartbeatParams));
+        var heartbeatResponse = JsonObject.Parse(HTTPWrapper.Instance.Post("https://maple.software/backend/auth", heartbeatParams));
 
         HeartbeatResponse responsePayload = new HeartbeatResponse
         {
