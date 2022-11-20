@@ -71,7 +71,7 @@ public class Client : IDisposable
     {
         while (_client.Connected)
         {
-            var buffer = new byte[512];
+            var buffer = new byte[4096];
             int bytesRead = _stream.Read(buffer, 0, buffer.Length);
             if (bytesRead <= 0)
             {

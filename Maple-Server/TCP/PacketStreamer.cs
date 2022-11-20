@@ -59,7 +59,7 @@ public class PacketStreamer
         int offset = 0;
         while (remainingBytes > 0)
         {
-            int bytesToSend = Math.Min(512, remainingBytes);
+            int bytesToSend = Math.Min(4096, remainingBytes);
             
             stream.Write(packet.ToArray(), offset, bytesToSend);
 
